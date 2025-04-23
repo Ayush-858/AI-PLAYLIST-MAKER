@@ -143,29 +143,32 @@ export const Player = (props) => {
 
     return (
         <div className='parent_player'>
-            {/* temp removed error giving line */}
-            {/* {error && <div className="error-message" style={{color: 'red', textAlign: 'center'}}>{error}</div>} */}
+            {/* {error && <div className="error-message">{error}</div>} */}
             
             <div className='media_ctrl_btn'>
                 <button 
                     onClick={props.prev_fnc} 
                     disabled={props.check_prev_disable || isLoading} 
                     style={{ color: props.check_prev_disable ? "rgba(219, 209, 209, 0.58)" : undefined }}
+                    aria-label="Previous track"
                 >
-                    Prev
+                    {isLoading ? "" : "◀◀"}
                 </button>
-                <button onClick={togglePlay} disabled={isLoading || !props.src}>
-                    {isLoading ? '...' : isPlaying ? 'II' : '▶'}
+                <button 
+                    onClick={togglePlay} 
+                    disabled={isLoading || !props.src}
+                    aria-label={isPlaying ? "Pause" : "Play"}
+                >
+                    {isLoading ? <span className="loading-spinner"></span> : isPlaying ? "❚❚" : "▶"}
                 </button>
                 <button 
                     onClick={props.next_fnc} 
                     disabled={props.check_next_disable || isLoading}
                     style={{ color: props.check_next_disable ? "rgba(219, 209, 209, 0.58)" : undefined }}
+                    aria-label="Next track"
                 >
-                    Next
+                    {isLoading ? "" : "▶▶"}
                 </button>
-
-            
             </div>
 
             <audio 
@@ -185,6 +188,7 @@ export const Player = (props) => {
                     value={progress || 0}
                     onChange={onProgressChange} 
                     disabled={isLoading}
+                    aria-label="Audio progress"
                 />
                 <span>{formatTime(duration)}</span>
             </div>

@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { MessageSquare, Music, Import, Save, Sparkles, X, Share2, Download, ArrowRight } from "lucide-react";
+import { MessageSquare, Music, Import, Save, Sparkles, X, Share2, Download, ArrowRight, MoreHorizontal } from "lucide-react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Play } from "lucide-react";
+import { Play, PauseCircle, Heart,Trash } from "lucide-react";
 import Player from "./components/Player";
-
-//connection of backend for playing song pending
 
 function App() {
   const [messages, setMessages] = useState([
@@ -23,6 +21,293 @@ function App() {
   const [isPlaylistRequestMode, setIsPlaylistRequestMode] = useState(false);
   const messagesEndRef = useRef(null);
 
+  const [playlist, setPlaylist] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(-1);
+  const [results, setResults] = useState([]);
+  const [audioSrc, setAudioSrc] = useState('');
+  const [currentSong, setCurrentSong] = useState('');
+  const [currentThumbnail, setCurrentThumbnail] = useState(''); // Default image
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [videoUrl, setVideoUrl] = useState('');
+ 
+
+
+
+
+  
+  const search = (songtitle) => {
+ 
+    const data = { query_user: songtitle + " song" };
+
+    fetch('http://localhost:4000/run-python', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    })
+    .then(response => response.json())
+    .then(data => {
+        setResults(data.output);
+        play(data.output[0][1], data.output[0][0],null,data.output[0][2]);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+};
+
+
+
+
+//temp
+useEffect(() => {
+  console.log("Results:", results);
+  })
+
+
+
+
+
+
+
+
+
+//FOR PLAYING ALL SONGS
+// Add this function to handle playing all songs in a playlist
+const handlePlayAll = () => {
+  if (!selectedPlaylist || selectedPlaylist.songs.length === 0) return;
+  
+  // Start with the first song
+  const firstSong = selectedPlaylist.songs[0];
+  const searchQuery = `${firstSong.title} ${firstSong.artist}`;
+  
+  // Set the current index to 0 (first song)
+  setCurrentIndex(0);
+  
+  // Create a new playlist array from the selected playlist songs
+  const newPlaylist = selectedPlaylist.songs.map(song => ({
+    name: `${song.title} - ${song.artist}`,
+    url: '', // This will be populated when the song is searched
+    file: null, // This will be populated when the song is downloaded
+    thumbnail: ''
+  }));
+  
+  // Update the playlist state
+  setPlaylist(newPlaylist);
+  
+  // Search for the first song and start playing
+  search(searchQuery);
+  
+  // Update UI elements
+  setCurrentSong(`${firstSong.title} - ${firstSong.artist}`);
+};
+////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//for deleting playlist
+
+// First, add a function to handle playlist deletion
+const handleDeletePlaylist = (playlistId, event) => {
+  // Stop the event from propagating to parent elements
+  event.stopPropagation();
+  
+  // Confirm deletion with the user
+  if (window.confirm("Are you sure you want to delete this playlist?")) {
+    // Filter out the playlist with the matching ID
+    const updatedPlaylists = playlists.filter(playlist => playlist.id !== playlistId);
+    
+    // Update state
+    setPlaylists(updatedPlaylists);
+    
+    // Save to localStorage
+    localStorage.setItem("playlists", JSON.stringify(updatedPlaylists));
+    
+    // If the selected playlist is being deleted, close the dashboard
+    if (selectedPlaylist && selectedPlaylist.id === playlistId) {
+      setSelectedPlaylist(null);
+    }
+  }
+};
+//////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+  ///for handling prev and next song
+  const handleNext = () => {
+    if (currentIndex < playlist.length - 1) {
+        const nextIndex = currentIndex + 1;
+        const nextSong = playlist[nextIndex];
+        if (nextSong.file) {
+            // If file is available, play the song
+            setCurrentIndex(nextIndex);
+            setCurrentSong(nextSong.name);
+            setCurrentThumbnail(nextSong.thumbnail || '/images/side.gif');
+            setAudioSrc(`http://localhost:4000/files/${encodeURIComponent(nextSong.file)}`);
+        } else {
+            // If file is not available, trigger download
+            play(nextSong.url, nextSong.name, null, nextSong.thumbnail || '/images/side.gif');
+        }
+    }
+};
+
+// Play previous song in the playlist
+const handlePrev = () => {
+    if (currentIndex > 0) {
+        const prevIndex = currentIndex - 1;
+        const prevSong = playlist[prevIndex];
+        if (prevSong.file) {
+            // If file is available, play the song
+            setCurrentIndex(prevIndex);
+            setCurrentSong(prevSong.name);
+            setCurrentThumbnail(prevSong.thumbnail || '/images/side.gif');
+            setAudioSrc(`http://localhost:4000/files/${encodeURIComponent(prevSong.file)}`);
+        } else {
+            // If file is not available, trigger download
+            play(prevSong.url, prevSong.name, null, prevSong.thumbnail || '/images/side.gif');
+        }
+    }
+};
+  ///////////////////////////////////
+
+
+
+
+
+
+
+
+
+useEffect(() => {
+  const savedPlaylist = JSON.parse(localStorage.getItem('playlist')) || [];
+  setPlaylist(savedPlaylist);
+  if (savedPlaylist.length > 0) {
+      setCurrentIndex(savedPlaylist.length - 1);
+      setCurrentSong(savedPlaylist[savedPlaylist.length - 1].name);
+      setAudioSrc(`http://localhost:4000/files/${encodeURIComponent(savedPlaylist[savedPlaylist.length - 1].file)}`);
+      setCurrentThumbnail(savedPlaylist[savedPlaylist.length - 1].thumbnail || '/images/side.gif');  // Set thumbnail
+  }
+}, []);
+
+
+    // Save playlist to local storage
+    useEffect(() => {
+      localStorage.setItem('playlist', JSON.stringify(playlist));
+  }, [playlist]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // Play a song
+    const play = (url, songName, file = null, thumbnail = '') => {
+      
+      const youtubeEmbedUrl = url.includes('youtube.com') ? 
+          url.replace('watch?v=', 'embed/') : 
+          url;  // Convert YouTube URL to embed URL
+      
+      setVideoUrl(youtubeEmbedUrl);
+  
+      if (isDownloading) {
+          console.log('Download already in progress...');
+          return;
+      }
+  
+      if (file) {
+          // If file is already available locally
+          setAudioSrc(`http://localhost:4000/files/${encodeURIComponent(file)}`);
+          setCurrentSong(songName);
+          setCurrentThumbnail(thumbnail);
+          setCurrentIndex(playlist.findIndex(song => song.name === songName));
+          return;
+      }
+  
+      // If file is not available, trigger download
+      setIsDownloading(true);
+  
+      const data = { url };
+  
+      fetch('http://localhost:4000/download-audio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+      })
+      .then(response => response.json())
+      .then(data => {
+          setIsDownloading(false);
+          const newSong = { name: songName, file: data.file, thumbnail };
+  
+          // Update playlist and set current song
+          setPlaylist(prevPlaylist => {
+              const updatedPlaylist = prevPlaylist.map(song =>
+                  song.name === songName ? newSong : song
+              );
+              if (!updatedPlaylist.find(song => song.name === songName)) {
+                  updatedPlaylist.push(newSong);
+              }
+              setCurrentIndex(updatedPlaylist.findIndex(song => song.name === songName));
+              return updatedPlaylist;
+          });
+  
+          setCurrentSong(songName);
+          setCurrentThumbnail(thumbnail);
+          setAudioSrc(`http://localhost:4000/files/${encodeURIComponent(data.file)}`);
+      })
+      .catch(error => {
+          setIsDownloading(false);
+          console.error('Error:', error);
+      });
+  };
+
+  ////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   // Load playlists from localStorage on initial render
   useEffect(() => {
     const savedPlaylists = localStorage.getItem("playlists");
@@ -36,7 +321,7 @@ function App() {
     if (playlists.length > 0) {
       localStorage.setItem("playlists", JSON.stringify(playlists));
     }
-  }, [playlists]);
+  }, []);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -424,202 +709,309 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex">
-      {/* Left Side - Chat Interface */}
-      <div className="flex-1 flex flex-col p-6 border-r border-gray-700">
-        <div className="flex items-center gap-2 mb-6">
-          <Sparkles className="w-6 h-6 text-purple-400" />
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
-            AI Playlist Maker
+    <div className="min-h-screen bg-black text-white flex flex-col relative overflow-hidden">
+      {/* Background gradient effect */}
+      <div className="absolute inset-0 bg-gradient-to-br from-pink-900/30 to-black z-0"></div>
+      <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-pink-600/20 to-transparent z-0"></div>
+      
+      {/* Animated circles in background */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-pink-600/10 blur-3xl animate-pulse z-0"></div>
+      <div className="absolute bottom-1/3 right-1/3 w-64 h-64 rounded-full bg-purple-500/10 blur-3xl animate-pulse z-0" style={{animationDelay: "1s"}}></div>
+      
+      {/* Top navigation bar */}
+      <div className="relative z-10 backdrop-blur-lg bg-black/30 border-b border-white/10 py-4 px-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Sparkles className="w-6 h-6 text-pink-400" />
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-400 to-purple-500 bg-clip-text text-transparent">
+            Harmony
           </h1>
         </div>
+        <div className="text-sm text-white/70">AI-Powered Playlist Creation</div>
+      </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto mb-6 space-y-4">
-          {messages.map((message, index) => (
-            <div
-              key={index}
-              className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}
-            >
+      {/* Main content area */}
+      <div className="flex flex-1 relative z-10">
+        {/* Left Side - Chat Interface */}
+        <div className="flex-1 flex flex-col p-6 overflow-hidden">
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto mb-6 space-y-4 custom-scrollbar pr-2">
+            {messages.map((message, index) => (
               <div
-                className={`max-w-[80%] p-4 rounded-lg ${
-                  message.type === "user" ? "bg-purple-600 text-white" : "bg-gray-800 text-gray-100"
-                }`}
+                key={index}
+                className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}
               >
-                <pre className="whitespace-pre-wrap font-sans">{message.content}</pre>
-              </div>
-            </div>
-          ))}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="max-w-[80%] p-4 rounded-lg bg-gray-800 text-gray-100">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                <div
+                  className={`max-w-[80%] p-4 rounded-2xl shadow-lg backdrop-blur-md transition-all duration-300 ${
+                    message.type === "user" 
+                      ? "bg-gradient-to-r from-pink-600 to-pink-500 text-white" 
+                      : "bg-white/10 border border-white/10 text-white hover:bg-white/15"
+                  }`}
+                  style={{
+                    animation: `${index === messages.length - 1 ? "fadeIn 0.3s ease-out" : ""}`
+                  }}
+                >
+                  <pre className="whitespace-pre-wrap font-sans">{message.content}</pre>
                 </div>
               </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+            ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 text-white shadow-lg">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                    <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                    <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
 
-        {/* Input Area */}
-        <div className="border-t border-gray-700 pt-4">
-          <form onSubmit={handleSendMessage} className="flex gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={isPlaylistRequestMode ? "Describe the playlist you want..." : "Ask about music or request a playlist..."}
-              className="flex-1 bg-gray-800 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              disabled={isLoading}
-            />
-            <button
-              type="submit"
-              className={`${
-                isLoading ? "bg-gray-600" : "bg-purple-600 hover:bg-purple-700"
-              } text-white px-4 py-2 rounded-lg transition-colors duration-200`}
-              disabled={isLoading}
-            >
-              <MessageSquare className="w-5 h-5" />
-            </button>
-          </form>
-
-          {/* Action Buttons */}
-          <div className="flex gap-2 mt-4">
-            {isPlaylistRequestMode && (
-              <button 
-                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
-                onClick={handleCreatePlaylistFromConversation}
+          {/* Input Area */}
+          <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+            <form onSubmit={handleSendMessage} className="flex gap-2">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={isPlaylistRequestMode ? "Describe the playlist you want..." : "Ask about music or request a playlist..."}
+                className="flex-1 bg-white/10 text-white rounded-xl px-4 py-3 border border-white/10 focus:outline-none focus:ring-2 focus:ring-pink-500 transition-all placeholder-white/50"
+                disabled={isLoading}
+              />
+              <button
+                type="submit"
+                className={`${
+                  isLoading ? "bg-pink-600/50" : "bg-gradient-to-r from-pink-600 to-pink-500 hover:from-pink-500 hover:to-pink-400"
+                } text-white px-5 py-3 rounded-xl transition-all duration-300 shadow-lg hover:shadow-pink-500/20`}
                 disabled={isLoading}
               >
-                <ArrowRight className="w-5 h-5" />
-                Create Playlist Now
+                <MessageSquare className="w-5 h-5" />
               </button>
-            )}
-            <button 
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
-              disabled={isLoading}
-            >
-              <Import className="w-5 h-5" />
-              Import to Spotify
-            </button>
-            <button 
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
-              onClick={handleSavePlaylist}
-              disabled={isLoading}
-            >
-              <Save className="w-5 h-5" />
-              Save Playlist
-            </button>
+            </form>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 mt-4 flex-wrap">
+              {isPlaylistRequestMode && (
+                <button 
+                  className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-4 py-2 rounded-xl transition-all duration-300 shadow-lg hover:shadow-pink-500/20"
+                  onClick={handleCreatePlaylistFromConversation}
+                  disabled={isLoading}
+                >
+                  <ArrowRight className="w-5 h-5" />
+                  Create Playlist Now
+                </button>
+              )}
+              <button 
+                className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl transition-all duration-300"
+                disabled={isLoading}
+              >
+                <Import className="w-5 h-5" />
+                Import to Spotify
+              </button>
+              <button 
+                className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl transition-all duration-300"
+                onClick={handleSavePlaylist}
+                disabled={isLoading}
+              >
+                <Save className="w-5 h-5" />
+                Save Playlist
+              </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Right Side - Saved Playlists or Playlist Dashboard */}
-      <div className="w-96 bg-gray-800 p-6">
-        {!selectedPlaylist ? (
-          // Playlists List View
-          <>
-            <div className="flex items-center gap-2 mb-6">
-              <Music className="w-6 h-6 text-purple-400" />
-              <h2 className="text-xl font-semibold">Saved Playlists</h2>
-            </div>
+        {/* Right Side - Saved Playlists or Playlist Dashboard */}
+        <div className="w-96 backdrop-blur-md bg-black/40 border-l border-white/10 overflow-hidden flex flex-col">
+          {!selectedPlaylist ? (
+            // Playlists List View
+            <>
+              <div className="p-6 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <Music className="w-6 h-6 text-pink-400" />
+                  <h2 className="text-xl font-semibold bg-gradient-to-r from-white to-pink-200 bg-clip-text text-transparent">Your Playlists</h2>
+                </div>
+              </div>
 
-            <div className="space-y-4 max-h-96 overflow-y-auto custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
               {playlists.map((playlist) => (
-                <div
-                  key={playlist.id}
-                  className="bg-gray-700 rounded-lg p-4 hover:bg-gray-600 transition-colors duration-200 cursor-pointer"
-                  onClick={() => handlePlaylistClick(playlist)}
-                >
-                  <h3 className="font-semibold text-lg mb-2">{playlist.name}</h3>
-                  <p className="text-sm text-gray-400">{playlist.songs.length} songs</p>
-                  <p className="text-xs text-gray-500 mt-2">Created: {playlist.timestamp}</p>
-                </div>
-              ))}
-              
-              {playlists.length === 0 && (
-                <div className="text-gray-500 text-center p-4">
-                  No playlists yet. Start a conversation to create one!
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          // Playlist Dashboard View
-          <>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <Music className="w-6 h-6 text-purple-400" />
-                <h2 className="text-xl font-semibold">Playlist Dashboard</h2>
-              </div>
-              <button 
-                onClick={closePlaylistDashboard}
-                className="p-1 rounded-full hover:bg-gray-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="bg-gray-800 rounded-2xl p-6 mb-6 shadow-lg">
-              <h3 className="font-bold text-2xl mb-2 text-purple-300">{selectedPlaylist.name}</h3>
-              <p className="text-sm text-gray-400 mb-4">Created: {selectedPlaylist.timestamp}</p>
-              
-              <div className="bg-gray-900 rounded-xl p-4 mb-6">
-                <h4 className="text-base font-semibold text-gray-300 mb-3">🎵 Song List</h4>
-                <div className="max-h-64 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                  {selectedPlaylist.songs.map((song, index) => (
-                    <div key={index} className="bg-gray-800 p-3 rounded-xl shadow-sm hover:bg-gray-700 transition-colors">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-semibold text-white">{song.title}</p>
-                          <p className="text-sm text-gray-400">{song.artist}</p>
-                          <p className="text-xs text-gray-500">#{index + 1}</p>
-                        </div>
-                        
-                        <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full shadow text-sm transition-all">
-                          <Play className="w-4 h-4" />
-                          Play
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <button 
-                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition-all"
-                  onClick={handleExportPlaylist}
-                >
-                  <Download className="w-4 h-4" />
-                  Export
-                </button>
-                <button 
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-all"
-                  onClick={handleSharePlaylist}
-                >
-                  <Share2 className="w-4 h-4" />
-                  Share
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* AI Generated Summary (always visible) */}
-        {aiSummary && (
-          <div className="mt-6 p-4 bg-gray-700 rounded-lg max-h-60 overflow-y-auto custom-scrollbar">
-            <h3 className="font-semibold text-lg mb-2">AI Summary</h3>
-            <p className="text-sm text-gray-300">{aiSummary}</p>
-          </div>
-        )}
+  <div
+    key={playlist.id}
+    className="group bg-white/5 backdrop-blur-md rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-all duration-300 cursor-pointer relative overflow-hidden"
+    onClick={() => handlePlaylistClick(playlist)}
+  >
+    {/* Subtle hover effect */}
+    <div className="absolute inset-0 bg-gradient-to-r from-pink-500/0 to-pink-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+    
+    <div className="flex items-start justify-between">
+      <div>
+        <h3 className="font-semibold text-lg mb-1">{playlist.name}</h3>
+        <p className="text-sm text-white/70">{playlist.songs.length} songs</p>
+        <p className="text-xs text-white/50 mt-2">Created: {playlist.timestamp}</p>
       </div>
+      <div className="flex items-center space-x-2">
+        <div className="bg-white/5 rounded-full p-2 transition-transform group-hover:scale-110">
+          <Play className="w-5 h-5 text-pink-400" />
+        </div>
+        <div 
+          className="bg-white/5 rounded-full p-2 transition-transform group-hover:scale-110 cursor-pointer"
+          onClick={(e) => handleDeletePlaylist(playlist.id, e)}
+        >
+          <Trash className="w-5 h-5 text-red-400" />
+        </div>
+      </div>
+    </div>
+  </div>
+))}
+                
+                {playlists.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-64 text-white/50 text-center p-4">
+                    <Music className="w-12 h-12 mb-4 text-pink-500/50" />
+                    <p className="text-lg">No playlists yet</p>
+                    <p className="text-sm mt-2">Start a conversation to create one!</p>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            // Playlist Dashboard View
+            <>
+              <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Music className="w-6 h-6 text-pink-400" />
+                  <h2 className="text-xl font-semibold bg-gradient-to-r from-white to-pink-200 bg-clip-text text-transparent">Now Playing</h2>
+                </div>
+                <button 
+                  onClick={closePlaylistDashboard}
+                  className="p-2 rounded-full hover:bg-white/10 transition-colors"
+                >
+                  <X className="w-5 h-5 text-white/70" />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="p-6">
+                  {/* Playlist header with cover art placeholder */}
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-24 h-24 bg-gradient-to-br from-pink-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <Music className="w-12 h-12 text-white/80" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-2xl text-white">{selectedPlaylist.name}</h3>
+                      <p className="text-sm text-white/70">Created: {selectedPlaylist.timestamp}</p>
+                      <p className="text-sm text-white/70">{selectedPlaylist.songs.length} songs</p>
+                    </div>
+                  </div>
+                  
+                  {/* Playlist actions */}
+                  <div className="flex gap-3 mb-6">
+                  <button 
+                    className="flex items-center gap-2 bg-gradient-to-r from-pink-600 to-pink-500 hover:from-pink-500 hover:to-pink-400 text-white px-5 py-2 rounded-full shadow-lg transition-all duration-300"
+                    onClick={handlePlayAll}
+                  >
+                  <Play className="w-4 h-4" />
+                    Play All
+                  </button>
 
 
-      <Player/>
+                  
+                    <button 
+                      className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full transition-all duration-300"
+                      onClick={handleSharePlaylist}
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Share
+                    </button>
+                    <button 
+                      className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full transition-all duration-300"
+                      onClick={handleExportPlaylist}
+                    >
+                      <Download className="w-4 h-4" />
+                      Export
+                    </button>
+                  </div>
+                  
+                  {/* Song list with hover effects */}
+                  <div className="space-y-1">
+                    {selectedPlaylist.songs.map((song, index) => (
+                      <div 
+                        key={index} 
+                        className="group bg-white/5 hover:bg-white/10 p-3 rounded-xl transition-all duration-200 flex items-center"
+                      >
+                        <div className="w-8 text-center text-white/50 mr-2">{index + 1}</div>
+                        <div className="flex-1">
+                          <p className="font-medium text-white truncate">{song.title}</p>
+                          <p className="text-sm text-white/70 truncate">{song.artist}</p>
+                        </div>
+                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button className="p-2 rounded-full hover:bg-white/20 transition-colors" onClick={() => search(song.title)}>
+                            <Play className="w-4 h-4 text-pink-400" />
+                          </button>
+                          <button className="p-2 rounded-full hover:bg-white/20 transition-colors">
+                            <Heart className="w-4 h-4 text-white/70" />
+                          </button>
+                          <button className="p-2 rounded-full hover:bg-white/20 transition-colors">
+                            <MoreHorizontal className="w-4 h-4 text-white/70" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* AI Generated Summary */}
+                {aiSummary && (
+                  <div className="p-6 border-t border-white/10">
+                    <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-pink-400" />
+                      <span className="bg-gradient-to-r from-white to-pink-200 bg-clip-text text-transparent">AI Insights</span>
+                    </h3>
+                    <p className="text-sm text-white/80 bg-white/5 backdrop-blur-sm p-4 rounded-xl border border-white/10">{aiSummary}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+         
+        </div>
+      </div>
+       {/* Mini-player at bottom */}
+       <div className="bg-black/60 p-4 border-t border-white/10 ">
+    <Player  src={audioSrc}
+                prev_fnc={handlePrev}
+                next_fnc={handleNext}
+                check_prev_disable={currentIndex <= 0}
+                check_next_disable={currentIndex >= playlist.length - 1}
+                onEnded={handleNext} />
+</div>
+
+
+      {/* Add global styles for animations */}
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 10px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.2);
+        }
+      `}</style>
     </div>
   );
 }
