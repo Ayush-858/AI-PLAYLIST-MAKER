@@ -1,26 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { MessageSquare, Music, Import, Save, Sparkles, X, Share2, Download, ArrowRight } from "lucide-react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Play } from "lucide-react";
+import Player from "./components/Player";
 
-interface Message {
-  type: "ai" | "user";
-  content: string;
-}
-
-interface Song {
-  title: string;
-  artist: string;
-}
-
-interface Playlist {
-  id: string;
-  name: string;
-  songs: Song[];
-  timestamp: string;
-}
+//connection of backend for playing song pending
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState([
     {
       type: "ai",
       content:
@@ -28,13 +15,13 @@ function App() {
     },
   ]);
   const [input, setInput] = useState("");
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [aiSummary, setAiSummary] = useState<string>("");
+  const [playlists, setPlaylists] = useState([]);
+  const [aiSummary, setAiSummary] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
-  const [conversationContext, setConversationContext] = useState<string[]>([]);
+  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
+  const [conversationContext, setConversationContext] = useState([]);
   const [isPlaylistRequestMode, setIsPlaylistRequestMode] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef(null);
 
   // Load playlists from localStorage on initial render
   useEffect(() => {
@@ -57,7 +44,7 @@ function App() {
   }, [messages]);
 
   // Function to determine if the user's message is a playlist request
-  const analyzeUserIntent = async (userMessage: string) => {
+  const analyzeUserIntent = async (userMessage) => {
     const apiKey = "AIzaSyCwIyE-xCxFunqmq65GmhS6VgKmY1Cpkfs";
     if (!apiKey) {
       console.error("❌ Gemini API key is missing!");
@@ -115,7 +102,7 @@ function App() {
   };
 
   // Function to generate a playlist using Gemini API
-  const generatePlaylistWithGemini = async (userQuery: string) => {
+  const generatePlaylistWithGemini = async (userQuery) => {
     setIsLoading(true);
 
     const apiKey = "AIzaSyCwIyE-xCxFunqmq65GmhS6VgKmY1Cpkfs";
@@ -165,7 +152,7 @@ function App() {
         const jsonResponse = JSON.parse(jsonMatch[0]);
         
         // Create a new playlist object
-        const newPlaylist: Playlist = {
+        const newPlaylist = {
           id: Date.now().toString(),
           name: jsonResponse.playlistName || `Playlist for "${userQuery.slice(0, 20)}${userQuery.length > 20 ? '...' : ''}"`,
           songs: jsonResponse.songs || [],
@@ -179,7 +166,7 @@ function App() {
         console.error("Error parsing Gemini response:", parseError);
         
         // Fallback: Create a default playlist with placeholder songs
-        const fallbackPlaylist: Playlist = {
+        const fallbackPlaylist = {
           id: Date.now().toString(),
           name: `Playlist for "${userQuery.slice(0, 20)}${userQuery.length > 20 ? '...' : ''}"`,
           songs: [
@@ -199,7 +186,7 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
 
@@ -300,7 +287,7 @@ function App() {
   };
 
   // Function to generate AI summary using Gemini API
-  const generateAiSummary = async (playlist: Playlist) => {
+  const generateAiSummary = async (playlist) => {
     const apiKey = "AIzaSyCwIyE-xCxFunqmq65GmhS6VgKmY1Cpkfs";
     if (!apiKey) {
       console.error("❌ Gemini API key is missing!");
@@ -335,7 +322,7 @@ function App() {
     alert("All playlists are automatically saved to your browser.");
   };
   
-  const handlePlaylistClick = (playlist: Playlist) => {
+  const handlePlaylistClick = (playlist) => {
     setSelectedPlaylist(playlist);
     generateAiSummary(playlist);
   };
@@ -392,7 +379,7 @@ function App() {
   };
   
   // Fallback sharing method using clipboard
-  const fallbackShare = (text: string) => {
+  const fallbackShare = (text) => {
     try {
       navigator.clipboard.writeText(text);
       alert("Playlist copied to clipboard! You can now paste and share it.");
@@ -540,7 +527,7 @@ function App() {
               <h2 className="text-xl font-semibold">Saved Playlists</h2>
             </div>
 
-            <div className="space-y-4 max-h-96 overflow-y-auto">
+            <div className="space-y-4 max-h-96 overflow-y-auto custom-scrollbar">
               {playlists.map((playlist) => (
                 <div
                   key={playlist.id}
@@ -576,32 +563,42 @@ function App() {
               </button>
             </div>
             
-            <div className="bg-gray-700 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-xl mb-2 text-purple-300">{selectedPlaylist.name}</h3>
+            <div className="bg-gray-800 rounded-2xl p-6 mb-6 shadow-lg">
+              <h3 className="font-bold text-2xl mb-2 text-purple-300">{selectedPlaylist.name}</h3>
               <p className="text-sm text-gray-400 mb-4">Created: {selectedPlaylist.timestamp}</p>
               
-              <div className="bg-gray-800 rounded-lg p-3 mb-4">
-                <h4 className="text-sm font-medium text-gray-300 mb-2">Song List</h4>
-                <div className="max-h-64 overflow-y-auto space-y-2">
+              <div className="bg-gray-900 rounded-xl p-4 mb-6">
+                <h4 className="text-base font-semibold text-gray-300 mb-3">🎵 Song List</h4>
+                <div className="max-h-64 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                   {selectedPlaylist.songs.map((song, index) => (
-                    <div key={index} className="bg-gray-700 p-2 rounded">
-                      <p className="font-medium">{song.title}</p>
-                      <p className="text-sm text-gray-400">{song.artist}</p>
+                    <div key={index} className="bg-gray-800 p-3 rounded-xl shadow-sm hover:bg-gray-700 transition-colors">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-semibold text-white">{song.title}</p>
+                          <p className="text-sm text-gray-400">{song.artist}</p>
+                          <p className="text-xs text-gray-500">#{index + 1}</p>
+                        </div>
+                        
+                        <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full shadow text-sm transition-all">
+                          <Play className="w-4 h-4" />
+                          Play
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-              
-              <div className="flex gap-2">
+
+              <div className="flex gap-3">
                 <button 
-                  className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200"
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition-all"
                   onClick={handleExportPlaylist}
                 >
                   <Download className="w-4 h-4" />
                   Export
                 </button>
                 <button 
-                  className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200"
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-all"
                   onClick={handleSharePlaylist}
                 >
                   <Share2 className="w-4 h-4" />
@@ -614,12 +611,15 @@ function App() {
 
         {/* AI Generated Summary (always visible) */}
         {aiSummary && (
-          <div className="mt-6 p-4 bg-gray-700 rounded-lg max-h-60 overflow-y-auto">
+          <div className="mt-6 p-4 bg-gray-700 rounded-lg max-h-60 overflow-y-auto custom-scrollbar">
             <h3 className="font-semibold text-lg mb-2">AI Summary</h3>
             <p className="text-sm text-gray-300">{aiSummary}</p>
           </div>
         )}
       </div>
+
+
+      <Player/>
     </div>
   );
 }
