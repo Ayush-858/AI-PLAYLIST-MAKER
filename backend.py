@@ -9,6 +9,9 @@ import re
 from youtubesearchpython import VideosSearch
 from datetime import datetime
 
+
+#remeber to add tar file ffmpeg in env variable
+
 # Flask app initialization
 app = Flask(__name__)
 CORS(app, resources={

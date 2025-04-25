@@ -29,7 +29,115 @@ function App() {
   const [currentThumbnail, setCurrentThumbnail] = useState(''); // Default image
   const [isDownloading, setIsDownloading] = useState(false);
   const [videoUrl, setVideoUrl] = useState('');
- 
+
+  //forsearching songs
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+
+
+  const currentSongDetails = {
+    title: currentSong,
+    artist: "unknown",
+    albumArt: currentThumbnail
+  };
+
+
+ //for seraching using top search bar
+ const handleSearchInputChange = (e) => {
+  setSearchQuery(e.target.value);
+};
+
+const handleSearchSubmit = () => {
+  if (searchQuery.length < 2) return;
+  
+  setIsSearching(true);
+  setShowSearchDropdown(true);
+  setSearchError(null);
+  
+  const data = { query_user: searchQuery + " song" };
+  
+  fetch('http://localhost:4000/run-python', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`Server responded with status: ${response.status}`);
+    }
+    return response.json();
+  })
+  .then(data => {
+    setSearchResults(data.output);
+    setIsSearching(false);
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    setIsSearching(false);
+    setSearchError("Failed to connect to the server. Please ensure the backend is running.");
+  });
+};
+
+const addToPlaylist = (songName, url, thumbnail) => {
+  if (!selectedPlaylist) {
+    alert("Please select a playlist first!");
+    return;
+  }
+  
+  const songParts = songName.split(' - ');
+  const newSong = {
+    title: songParts[0] || songName,
+    artist: songParts[1] || "Unknown Artist"
+  };
+  
+  const updatedPlaylists = playlists.map(playlist => {
+    if (playlist.id === selectedPlaylist.id) {
+      return {
+        ...playlist,
+        songs: [...playlist.songs, newSong]
+      };
+    }
+    return playlist;
+  });
+  
+  setPlaylists(updatedPlaylists);
+  localStorage.setItem("playlists", JSON.stringify(updatedPlaylists));
+  
+  if (selectedPlaylist) {
+    setSelectedPlaylist({
+      ...selectedPlaylist,
+      songs: [...selectedPlaylist.songs, newSong]
+    });
+  }
+  
+  alert(`Added "${songName}" to playlist "${selectedPlaylist.name}"`);
+};
+
+
+
+//when user click outside de=ropdown for closing
+//when user click outside dropdown for closing
+useEffect(() => {
+  const handleClickOutside = (event) => {
+    if (showSearchDropdown && 
+        !event.target.closest(".search-container") &&
+        !event.target.closest(".search-results-dropdown")) {
+      setShowSearchDropdown(false);
+    }
+  };
+  
+  document.addEventListener("mousedown", handleClickOutside);
+  return () => {
+    document.removeEventListener("mousedown", handleClickOutside);
+  };
+}, [showSearchDropdown]);
+
+/////////////////////////////////////////////////////////
 
 
 
@@ -59,7 +167,7 @@ function App() {
 
 //temp
 useEffect(() => {
-  console.log("Results:", results);
+  console.log("Results:", currentThumbnail);
   })
 
 
@@ -280,6 +388,7 @@ useEffect(() => {
           setCurrentSong(songName);
           setCurrentThumbnail(thumbnail);
           setAudioSrc(`http://localhost:4000/files/${encodeURIComponent(data.file)}`);
+          
       })
       .catch(error => {
           setIsDownloading(false);
@@ -718,16 +827,119 @@ useEffect(() => {
       <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-pink-600/10 blur-3xl animate-pulse z-0"></div>
       <div className="absolute bottom-1/3 right-1/3 w-64 h-64 rounded-full bg-purple-500/10 blur-3xl animate-pulse z-0" style={{animationDelay: "1s"}}></div>
       
-      {/* Top navigation bar */}
-      <div className="relative z-10 backdrop-blur-lg bg-black/30 border-b border-white/10 py-4 px-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Sparkles className="w-6 h-6 text-pink-400" />
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-400 to-purple-500 bg-clip-text text-transparent">
-            Harmony
-          </h1>
-        </div>
-        <div className="text-sm text-white/70">AI-Powered Playlist Creation</div>
+
+
+
+{/* Top navigation bar */}
+
+
+<div className="relative z-[1000] backdrop-blur-lg bg-black/30 border-b border-white/10 py-4 px-6 flex items-center justify-between">
+  <div className="flex items-center gap-3">
+    <Sparkles className="w-6 h-6 text-pink-400" />
+    <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-400 to-purple-500 bg-clip-text text-transparent">
+      Harmony
+    </h1>
+  </div>
+  
+  <div className="relative flex-1 max-w-md mx-6 search-container">
+    <div className="relative flex">
+      <input
+        type="text"
+        placeholder="Search for songs..."
+        value={searchQuery}
+        onChange={handleSearchInputChange}
+        onKeyDown={(e) => e.key === 'Enter' && handleSearchSubmit()}
+        className="w-full bg-white/10 border border-white/10 rounded-l-full px-5 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-pink-500 transition-all placeholder-white/50 text-white"
+      />
+      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/50">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
       </div>
+      
+      <button 
+        onClick={handleSearchSubmit}
+        className="bg-gradient-to-r from-pink-600 to-pink-500 hover:from-pink-500 hover:to-pink-400 text-white px-5 py-2 rounded-r-full transition-all duration-300 flex items-center justify-center"
+      >
+        Search
+      </button>
+      
+      {showSearchDropdown && (
+        <div className="absolute top-full mt-2 w-full bg-black/90 backdrop-blur-lg border border-white/10 rounded-xl shadow-lg z-500 overflow-hidden animate-fadeIn" >
+          {isSearching ? (
+            <div className="flex justify-center items-center p-4" >
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{ animationDelay: "0ms" }}></div>
+                <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{ animationDelay: "150ms" }}></div>
+                <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{ animationDelay: "300ms" }}></div>
+              </div>
+            </div>
+          ) : searchError ? (
+            <div className="p-4 text-center text-red-400" >
+              <p>{searchError}</p>
+              <p className="text-sm mt-2 text-white/60">
+                Make sure your backend server is running on port 4000.
+              </p>
+            </div>
+          ) : searchResults.length > 0 ? (
+            <div className="max-h-96 overflow-y-auto custom-scrollbar">
+              {searchResults.map((result, index) => (
+                <div 
+                  key={index}
+                  className="flex items-center p-3 hover:bg-white/10 transition-colors border-b border-white/5 last:border-0 group"
+                
+                >
+                  <img 
+                    src={result[2] || "/images/side.gif"} 
+                    alt={result[0]} 
+                    className="w-12 h-12 rounded-md object-cover"
+                    onError={(e) => e.target.src = "/images/side.gif"}
+                  />
+                  <div className="ml-3 flex-1">
+                    <p className="text-white font-medium truncate">{result[0]}</p>
+                  </div>
+                  <div className="flex space-x-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => {
+                        play(result[1], result[0], null, result[2]);
+                        setShowSearchDropdown(false);
+                      }}
+                      className="p-2 rounded-full bg-pink-500 hover:bg-pink-400 transition-colors transform hover:scale-105 active:scale-95"
+                      style={{ zIndex: 1000 }}
+                    >
+                      <Play className="w-4 h-4 text-white" />
+                    </button>
+                    <button 
+                      onClick={() => {
+                        addToPlaylist(result[0], result[1], result[2]);
+                      }}
+                      className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors transform hover:scale-105 active:scale-95"
+                    >
+                      <Import className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-4 text-center text-white/50">
+              {searchQuery.length > 0 ? "No results found" : "Type a song name and click search"}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+  
+  <div className="text-sm text-white/70">AI-Powered Playlist Creation</div>
+</div>
+
+
+
+
+
+
+
 
       {/* Main content area */}
       <div className="flex flex-1 relative z-10">
@@ -802,21 +1014,7 @@ useEffect(() => {
                   Create Playlist Now
                 </button>
               )}
-              <button 
-                className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl transition-all duration-300"
-                disabled={isLoading}
-              >
-                <Import className="w-5 h-5" />
-                Import to Spotify
-              </button>
-              <button 
-                className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl transition-all duration-300"
-                onClick={handleSavePlaylist}
-                disabled={isLoading}
-              >
-                <Save className="w-5 h-5" />
-                Save Playlist
-              </button>
+            
             </div>
           </div>
         </div>
@@ -906,7 +1104,7 @@ useEffect(() => {
                   {/* Playlist actions */}
                   <div className="flex gap-3 mb-6">
                   <button 
-                    className="flex items-center gap-2 bg-gradient-to-r from-pink-600 to-pink-500 hover:from-pink-500 hover:to-pink-400 text-white px-5 py-2 rounded-full shadow-lg transition-all duration-300"
+                    className="flex items-center gap-2 bg-gradient-to-r from-pink-600 to-pink-500 hover:from-pink-500 hover:to-pink-400 text-white px-5 py-2 rounded-full shadow-lg transition-all duration-300 text-xs"
                     onClick={handlePlayAll}
                   >
                   <Play className="w-4 h-4" />
@@ -983,7 +1181,8 @@ useEffect(() => {
                 next_fnc={handleNext}
                 check_prev_disable={currentIndex <= 0}
                 check_next_disable={currentIndex >= playlist.length - 1}
-                onEnded={handleNext} />
+                onEnded={handleNext}
+                currentsong={currentSongDetails}/>
 </div>
 
 
@@ -1011,6 +1210,33 @@ useEffect(() => {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: rgba(255, 255, 255, 0.2);
         }
+
+         @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-out forwards;
+  }
+  
+  .animate-slideIn {
+    animation: slideIn 0.3s ease-out forwards;
+  }
+  
+  /* Add hover animations for buttons */
+  .search-container button {
+    transition: all 0.2s ease;
+  }
+  
+  .search-container button:hover {
+    transform: translateY(-2px);
+  }
+  
+  .search-container button:active {
+    transform: translateY(0);
+  }
+
       `}</style>
     </div>
   );
