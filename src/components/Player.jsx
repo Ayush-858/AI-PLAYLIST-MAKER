@@ -384,54 +384,73 @@ export const Player = (props) => {
     };
 
     // Handle source changes
-    useEffect(() => {
-        if (props.src) {
-            setIsLoading(true);
-            setError(null);
-            setProgress(0);
-            setDuration(0);
+// Handle source changes
+useEffect(() => {
+    if (props.src) {
+        setIsLoading(true);
+        setError(null);
+        setProgress(0);
+        setDuration(0);
+        
+        // Set the source directly on the audio element
+        if (audioRef.current) {
+            audioRef.current.pause();
             
-            // Set the source directly on the audio element
-            // Do NOT re-initialize audio processing - keep the existing connection
-            if (audioRef.current) {
-                audioRef.current.pause();
+            // Set the source
+            audioRef.current.src = props.src;
+            audioRef.current.load();
+            
+            // We'll handle playback in the canplaythrough event
+            const canPlayHandler = () => {
+                setIsLoading(false);
                 
-                // Set the source
-                audioRef.current.src = props.src;
-                audioRef.current.load();
+                // Auto-play when source changes (if already playing before or first load)
+                if (processingSetupRef.current && !audioInitializedRef.current) {
+                    connectAudioElement();
+                }
                 
-                setIsPlaying(false);
+                // Auto-play the new track
+                audioRef.current.play()
+                    .then(() => {
+                        setIsPlaying(true);
+                        setError(null);
+                    })
+                    .catch(error => {
+                        console.error("Auto-play failed:", error);
+                        
+                        // Handle autoplay policy restriction
+                        if (error.name === 'NotAllowedError') {
+                            setError("Autoplay blocked. Please click play to continue.");
+                        } else {
+                            setError(`Playback failed: ${error.message || "Unknown error"}`);
+                        }
+                        
+                        setIsPlaying(false);
+                    });
                 
-                // We'll handle playback in the canplaythrough event
-                const canPlayHandler = () => {
+                // Clean up this one-time handler
+                audioRef.current.removeEventListener('canplaythrough', canPlayHandler);
+            };
+            
+            audioRef.current.addEventListener('canplaythrough', canPlayHandler);
+            
+            // Set timeout to handle cases where canplaythrough doesn't fire
+            const timeoutId = setTimeout(() => {
+                if (isLoading) {
                     setIsLoading(false);
-                    
-                    // Don't autoplay - wait for user interaction
-                    // This prevents the "NotAllowedError" from autoplay policy
-                    
-                    // Clean up this one-time handler
+                    setError("Audio loading timeout. Please check your connection.");
+                }
+            }, 15000); // 15 second timeout
+            
+            return () => {
+                clearTimeout(timeoutId);
+                if (audioRef.current) {
                     audioRef.current.removeEventListener('canplaythrough', canPlayHandler);
-                };
-                
-                audioRef.current.addEventListener('canplaythrough', canPlayHandler);
-                
-                // Set timeout to handle cases where canplaythrough doesn't fire
-                const timeoutId = setTimeout(() => {
-                    if (isLoading) {
-                        setIsLoading(false);
-                        setError("Audio loading timeout. Please check your connection.");
-                    }
-                }, 15000); // 15 second timeout
-                
-                return () => {
-                    clearTimeout(timeoutId);
-                    if (audioRef.current) {
-                        audioRef.current.removeEventListener('canplaythrough', canPlayHandler);
-                    }
-                };
-            }
+                }
+            };
         }
-    }, [props.src]);
+    }
+}, [props.src]);
 
     // Enhanced cleanup effect
     useEffect(() => {

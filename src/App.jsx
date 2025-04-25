@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { MessageSquare, Music, Import, Save, Sparkles, X, Share2, Download, ArrowRight, MoreHorizontal } from "lucide-react";
+import { MessageSquare, Music, Import, Save, Sparkles, X, Share2, Download, ArrowRight, MoreHorizontal,ListVideo } from "lucide-react";
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Play, PauseCircle, Heart,Trash } from "lucide-react";
 import Player from "./components/Player";
@@ -36,6 +37,74 @@ function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [searchError, setSearchError] = useState(null);
+
+
+
+
+  //for managing queue system
+  const [queue, setQueue] = useState([]);
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
+
+
+// Replace the addToQueue function with this:
+const addToQueue = (songName, url, thumbnail) => {
+  const newQueueItem = {
+    name: songName, 
+    url: url,
+    thumbnail: thumbnail || '/images/side.gif',
+    file: null
+  };
+  
+  setQueue(prev => [...prev, newQueueItem]);
+  
+  // Show notification
+  showQueueNotification(`Added "${songName}" to queue`);
+  
+  // If this is the first song in queue and nothing is playing, start playing it
+  if (queue.length === 0 && currentIndex === -1) {
+    playFromQueue(0);
+  }
+};
+  // Add this function to handle playing a song from the queue
+  const playFromQueue = (index) => {
+    if (index >= 0 && index < queue.length) {
+      const queueItem = queue[index];
+      play(queueItem.url, queueItem.name, queueItem.file, queueItem.thumbnail);
+    }
+  };
+  
+  // Add this function to handle removing a song from the queue
+  const removeFromQueue = (index) => {
+    setQueue(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  // Add this function to handle clearing the entire queue
+  const clearQueue = () => {
+    setQueue([]);
+  };
+
+
+
+
+  //////////////////////////////////
+
+
+
+  // queue notifications helper function
+const showQueueNotification = (message) => {
+  const notification = document.createElement('div');
+  notification.textContent = message;
+  notification.className = 'fixed top-24 right-4 bg-pink-600 text-white px-4 py-2 rounded-lg shadow-lg z-[1002] animate-fadeIn';
+  document.body.appendChild(notification);
+  setTimeout(() => {
+    notification.classList.add('animate-fadeOut');
+    setTimeout(() => {
+      document.body.removeChild(notification);
+    }, 300);
+  }, 2000);
+};
+
+
 
 
   const currentSongDetails = {
@@ -337,32 +406,28 @@ useEffect(() => {
 
     // Play a song
     const play = (url, songName, file = null, thumbnail = '') => {
-      
       const youtubeEmbedUrl = url.includes('youtube.com') ? 
           url.replace('watch?v=', 'embed/') : 
-          url;  // Convert YouTube URL to embed URL
+          url;
       
       setVideoUrl(youtubeEmbedUrl);
-  
+    
       if (isDownloading) {
           console.log('Download already in progress...');
           return;
       }
-  
+    
       if (file) {
-          // If file is already available locally
           setAudioSrc(`http://localhost:4000/files/${encodeURIComponent(file)}`);
           setCurrentSong(songName);
           setCurrentThumbnail(thumbnail);
-          setCurrentIndex(playlist.findIndex(song => song.name === songName));
           return;
       }
-  
-      // If file is not available, trigger download
+    
       setIsDownloading(true);
-  
+    
       const data = { url };
-  
+    
       fetch('http://localhost:4000/download-audio', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -372,8 +437,15 @@ useEffect(() => {
       .then(data => {
           setIsDownloading(false);
           const newSong = { name: songName, file: data.file, thumbnail };
-  
-          // Update playlist and set current song
+          
+          // Update the queue item if it exists
+          setQueue(prevQueue => 
+            prevQueue.map(item => 
+              item.name === songName ? {...item, file: data.file} : item
+            )
+          );
+    
+          // Update playlist as before
           setPlaylist(prevPlaylist => {
               const updatedPlaylist = prevPlaylist.map(song =>
                   song.name === songName ? newSong : song
@@ -381,21 +453,36 @@ useEffect(() => {
               if (!updatedPlaylist.find(song => song.name === songName)) {
                   updatedPlaylist.push(newSong);
               }
-              setCurrentIndex(updatedPlaylist.findIndex(song => song.name === songName));
               return updatedPlaylist;
           });
-  
+    
           setCurrentSong(songName);
           setCurrentThumbnail(thumbnail);
           setAudioSrc(`http://localhost:4000/files/${encodeURIComponent(data.file)}`);
-          
       })
       .catch(error => {
           setIsDownloading(false);
           console.error('Error:', error);
       });
-  };
-
+    };
+    
+    // Add this function to handle auto-play of next song in queue
+    const handleSongEnd = () => {
+      // First check if there's a next song in the queue
+      const currentQueueIndex = queue.findIndex(item => item.name === currentSong);
+      
+      if (currentQueueIndex !== -1 && currentQueueIndex < queue.length - 1) {
+        // If there's a next item in queue, play it
+        playFromQueue(currentQueueIndex + 1);
+      } else if (queue.length > 0 && currentQueueIndex !== -1) {
+        // If we've reached the end of the queue, remove all played songs
+        setQueue(prev => prev.filter((_, i) => i > currentQueueIndex));
+      } else {
+        // If no queue or item not in queue, use the original next function
+        handleNext();
+      }
+    };
+    
   ////////////////////////////////////////////////
 
 
@@ -878,48 +965,59 @@ useEffect(() => {
             <div className="p-4 text-center text-red-400" >
               <p>{searchError}</p>
               <p className="text-sm mt-2 text-white/60">
-                Make sure your backend server is running on port 4000.
+         
               </p>
             </div>
           ) : searchResults.length > 0 ? (
             <div className="max-h-96 overflow-y-auto custom-scrollbar">
-              {searchResults.map((result, index) => (
-                <div 
-                  key={index}
-                  className="flex items-center p-3 hover:bg-white/10 transition-colors border-b border-white/5 last:border-0 group"
-                
-                >
-                  <img 
-                    src={result[2] || "/images/side.gif"} 
-                    alt={result[0]} 
-                    className="w-12 h-12 rounded-md object-cover"
-                    onError={(e) => e.target.src = "/images/side.gif"}
-                  />
-                  <div className="ml-3 flex-1">
-                    <p className="text-white font-medium truncate">{result[0]}</p>
-                  </div>
-                  <div className="flex space-x-2 opacity-80 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => {
-                        play(result[1], result[0], null, result[2]);
-                        setShowSearchDropdown(false);
-                      }}
-                      className="p-2 rounded-full bg-pink-500 hover:bg-pink-400 transition-colors transform hover:scale-105 active:scale-95"
-                      style={{ zIndex: 1000 }}
-                    >
-                      <Play className="w-4 h-4 text-white" />
-                    </button>
-                    <button 
-                      onClick={() => {
-                        addToPlaylist(result[0], result[1], result[2]);
-                      }}
-                      className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors transform hover:scale-105 active:scale-95"
-                    >
-                      <Import className="w-4 h-4 text-white" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+
+{searchResults.map((result, index) => (
+  <div 
+    key={index}
+    className="flex items-center p-3 hover:bg-white/10 transition-colors border-b border-white/5 last:border-0 group"
+  >
+    <img 
+      src={result[2] || "/images/side.gif"} 
+      alt={result[0]} 
+      className="w-12 h-12 rounded-md object-cover"
+      onError={(e) => e.target.src = "/images/side.gif"}
+    />
+    <div className="ml-3 flex-1">
+      <p className="text-white font-medium truncate">{result[0]}</p>
+    </div>
+    <div className="flex space-x-2 opacity-80 group-hover:opacity-100 transition-opacity">
+      <button 
+        onClick={() => {
+          play(result[1], result[0], null, result[2]);
+          // Remove the addToQueue call from here
+          setShowSearchDropdown(false);
+        }}
+        className="p-2 rounded-full bg-pink-500 hover:bg-pink-400 transition-colors transform hover:scale-105 active:scale-95"
+        style={{ zIndex: 1000 }}
+      >
+        <Play className="w-4 h-4 text-white" />
+      </button>
+      {/* Add a new button for queue */}
+      <button 
+        onClick={() => {
+          addToQueue(result[0], result[1], result[2]);
+          // Show queue notification is already handled in addToQueue function
+        }}
+        className="p-2 rounded-full bg-gray-500 hover:bg-pink-400 transition-colors transform hover:scale-105 active:scale-95"
+      >
+        <ListVideo className="w-4 h-4 text-white" />
+      </button>
+      <button 
+        onClick={() => {
+          addToPlaylist(result[0], result[1], result[2]);
+        }}
+        className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors transform hover:scale-105 active:scale-95"
+      >
+        <Import className="w-4 h-4 text-white" />
+      </button>
+    </div>
+  </div>
+))}
             </div>
           ) : (
             <div className="p-4 text-center text-white/50">
@@ -1142,7 +1240,7 @@ useEffect(() => {
                           <p className="text-sm text-white/70 truncate">{song.artist}</p>
                         </div>
                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button className="p-2 rounded-full hover:bg-white/20 transition-colors" onClick={() => search(song.title)}>
+                          <button className="p-2 rounded-full hover:bg-white/20 transition-colors" onClick={() =>{search(song.title);}}>
                             <Play className="w-4 h-4 text-pink-400" />
                           </button>
                           <button className="p-2 rounded-full hover:bg-white/20 transition-colors">
@@ -1176,14 +1274,106 @@ useEffect(() => {
       </div>
        {/* Mini-player at bottom */}
        <div className="bg-black/60 p-4 border-t border-white/10 ">
-    <Player  src={audioSrc}
-                prev_fnc={handlePrev}
-                next_fnc={handleNext}
-                check_prev_disable={currentIndex <= 0}
-                check_next_disable={currentIndex >= playlist.length - 1}
-                onEnded={handleNext}
-                currentsong={currentSongDetails}/>
+       <Player 
+  src={audioSrc}
+  prev_fnc={handlePrev}
+  next_fnc={handleNext}
+  check_prev_disable={currentIndex <= 0}
+  check_next_disable={currentIndex >= playlist.length - 1}
+  onEnded={handleSongEnd}  // Changed from handleNext to our new function
+  currentsong={currentSongDetails}
+/>
 </div>
+
+
+
+{/* Queue Button and Dropdown */}
+<div className="fixed top-20 right-4 z-[1001]">
+  <button 
+    onClick={() => setIsQueueOpen(!isQueueOpen)}
+    className="flex items-center gap-1 bg-pink-600 hover:bg-pink-500 text-white px-3 py-1 rounded-full text-xs transition-all shadow-md"
+  >
+    {queue.length > 0 && (
+      <span className="inline-flex items-center justify-center bg-white text-pink-600 rounded-full w-5 h-5 text-xs font-bold">
+        {queue.length}
+      </span>
+    )}
+    <ListVideo />
+  </button>
+  
+  {isQueueOpen && (
+    <div className="absolute right-0 top-full mt-2 w-72 bg-black/90 backdrop-blur-lg border border-white/10 rounded-xl shadow-lg z-50 overflow-hidden animate-fadeIn">
+      <div className="p-3 border-b border-white/10 flex items-center justify-between">
+        <h3 className="font-semibold text-sm">Up Next ({queue.length})</h3>
+        <div className="flex gap-1">
+          <button 
+            onClick={clearQueue}
+            className="p-1 rounded-full hover:bg-white/10 transition-colors"
+            title="Clear queue"
+          >
+            <Trash className="w-4 h-4 text-white/70" />
+          </button>
+          <button 
+            onClick={() => setIsQueueOpen(false)}
+            className="p-1 rounded-full hover:bg-white/10 transition-colors"
+          >
+            <X className="w-4 h-4 text-white/70" />
+          </button>
+        </div>
+      </div>
+      
+      <div className="max-h-64 overflow-y-auto custom-scrollbar">
+        {queue.length === 0 ? (
+          <div className="py-8 text-center text-white/50">
+            <p>Your queue is empty</p>
+            <p className="text-xs mt-1">Search for songs to add</p>
+          </div>
+        ) : (
+          queue.map((item, index) => (
+            <div 
+              key={index} 
+              className="flex items-center p-2 hover:bg-white/5 border-b border-white/5 last:border-0 group"
+            >
+              <img 
+                src={item.thumbnail} 
+                alt={item.name} 
+                className="w-10 h-10 rounded object-cover"
+                onError={(e) => e.target.src = "/images/side.gif"}
+              />
+              <div className="ml-2 flex-1 overflow-hidden">
+                <p className="text-sm text-white font-medium truncate">{item.name}</p>
+              </div>
+              <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={() => playFromQueue(index)}
+                  className="p-1 rounded-full bg-pink-500/80 hover:bg-pink-500 transition-colors"
+                >
+                  <Play className="w-3 h-3 text-white" />
+                </button>
+                <button 
+                  onClick={() => removeFromQueue(index)}
+                  className="p-1 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                >
+                  <X className="w-3 h-3 text-white" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )}
+</div>
+
+
+
+
+
+
+
+
+
+
 
 
       {/* Add global styles for animations */}
@@ -1236,6 +1426,16 @@ useEffect(() => {
   .search-container button:active {
     transform: translateY(0);
   }
+
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.animate-fadeOut {
+  animation: fadeOut 0.3s ease-out forwards;
+}
 
       `}</style>
     </div>
