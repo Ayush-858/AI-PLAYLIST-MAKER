@@ -1,0 +1,107 @@
+Music Downloader & Player
+
+  
+
+
+---
+
+Overview
+
+This project allows you to download and play music for free by fetching songs directly from YouTube.
+It also uses Google Gemini AI to create personalized playlists based on your music preferences.
+
+
+---
+
+Features
+
+Download and play music from YouTube for free.
+
+AI-powered playlist creation (using Gemini AI).
+
+Fast and reliable downloads via yt-dlp.
+
+Lightweight, responsive frontend.
+
+Easy setup and usage.
+
+
+
+---
+
+Setup Instructions
+
+1. Install FFmpeg
+
+Download FFmpeg and install it.
+
+Add FFmpeg to your global system environment path.
+
+
+2. Install Python Libraries
+
+Make sure you have Python 3.9+ installed.
+
+Install required packages:
+
+pip install -r requirements.txt
+
+
+3. Configure Gemini API Key
+
+Create a .env file in the root directory.
+
+Add your Gemini API key like this:
+
+GEMINI_API_KEY=your_api_key_here
+
+
+4. Install Frontend Packages
+
+If the project has a frontend directory, navigate to it and run:
+
+npm install
+
+
+
+---
+
+Screenshots
+
+> (Add your screenshots here with proper markdown syntax, like)
+
+
+
+ 
+
+
+---
+
+Technologies Used
+
+Python (Backend)
+
+yt-dlp (YouTube download)
+
+Flask or FastAPI (Server-side) (Adjust depending on your stack)
+
+Google Gemini API (AI Playlist Creation)
+
+React / Next.js (Frontend) (If applicable)
+
+
+
+---
+
+License
+
+This project is licensed under the MIT License.
+
+
+---
+
+Notes
+
+Educational Purpose Only: This project is intended for educational use. Respect copyright laws when downloading content.
+
+Improvements Coming Soon: Advanced playlist AI, better UI, caching, offline support, etc.
